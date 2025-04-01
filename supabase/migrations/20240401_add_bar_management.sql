@@ -1,67 +1,64 @@
--- Create bar items table
-CREATE TABLE IF NOT EXISTS bar_items (
+-- Create bar inventory table
+CREATE TABLE IF NOT EXISTS bar_inventory (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   name VARCHAR(255) NOT NULL,
   category VARCHAR(100) NOT NULL,
-  price DECIMAL(10, 2) NOT NULL,
-  cost DECIMAL(10, 2) NOT NULL,
-  stock_quantity INTEGER NOT NULL DEFAULT 0,
+  quantity DECIMAL(10, 2) NOT NULL DEFAULT 0,
   unit VARCHAR(50) NOT NULL,
-  description TEXT,
-  image_url TEXT,
-  is_available BOOLEAN DEFAULT TRUE,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  unit_price DECIMAL(10, 2) NOT NULL,
+  reorder_level INTEGER NOT NULL DEFAULT 5,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- Create bar orders table
-CREATE TABLE IF NOT EXISTS bar_orders (
+-- Create bar sales table
+CREATE TABLE IF NOT EXISTS bar_sales (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  order_number VARCHAR(50) NOT NULL,
-  customer_name VARCHAR(255),
-  room_id UUID REFERENCES rooms(id) ON DELETE SET NULL,
-  booking_id UUID REFERENCES bookings(id) ON DELETE SET NULL,
-  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
-  status VARCHAR(50) NOT NULL DEFAULT 'PENDING',
-  total_amount DECIMAL(10, 2) NOT NULL DEFAULT 0,
-  payment_status VARCHAR(50) NOT NULL DEFAULT 'UNPAID',
-  payment_method VARCHAR(50),
-  notes TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  transaction_id VARCHAR(50) NOT NULL UNIQUE,
+  transaction_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  customer_id UUID REFERENCES customers(id),
+  item_count INTEGER NOT NULL,
+  total_amount DECIMAL(10, 2) NOT NULL,
+  payment_method VARCHAR(50) NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'completed',
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- Create bar order items table
-CREATE TABLE IF NOT EXISTS bar_order_items (
+-- Create bar sales items table
+CREATE TABLE IF NOT EXISTS bar_sales_items (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  order_id UUID NOT NULL REFERENCES bar_orders(id) ON DELETE CASCADE,
-  item_id UUID NOT NULL REFERENCES bar_items(id) ON DELETE RESTRICT,
-  quantity INTEGER NOT NULL,
+  sale_id UUID NOT NULL REFERENCES bar_sales(id) ON DELETE CASCADE,
+  inventory_id UUID NOT NULL REFERENCES bar_inventory(id),
+  quantity DECIMAL(10, 2) NOT NULL,
   unit_price DECIMAL(10, 2) NOT NULL,
   total_price DECIMAL(10, 2) NOT NULL,
-  notes TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- Create bar inventory transactions table
-CREATE TABLE IF NOT EXISTS bar_inventory_transactions (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  item_id UUID NOT NULL REFERENCES bar_items(id) ON DELETE CASCADE,
-  transaction_type VARCHAR(50) NOT NULL,
-  quantity INTEGER NOT NULL,
-  unit_cost DECIMAL(10, 2),
-  total_cost DECIMAL(10, 2),
-  reference_id UUID,
-  notes TEXT,
-  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
+-- Create view for daily sales aggregation
+CREATE OR REPLACE VIEW bar_sales_daily AS
+SELECT 
+  TO_CHAR(transaction_date, 'YYYY-MM-DD') as date,
+  COUNT(*) as transactions,
+  SUM(item_count) as items_sold,
+  SUM(total_amount) as total
+FROM bar_sales
+GROUP BY TO_CHAR(transaction_date, 'YYYY-MM-DD')
+ORDER BY date;
 
--- Add indexes for better performance
-CREATE INDEX IF NOT EXISTS idx_bar_orders_room_id ON bar_orders(room_id);
-CREATE INDEX IF NOT EXISTS idx_bar_orders_booking_id ON bar_orders(booking_id);
-CREATE INDEX IF NOT EXISTS idx_bar_orders_user_id ON bar_orders(user_id);
-CREATE INDEX IF NOT EXISTS idx_bar_order_items_order_id ON bar_order_items(order_id);
-CREATE INDEX IF NOT EXISTS idx_bar_order_items_item_id ON bar_order_items(item_id);
-CREATE INDEX IF NOT EXISTS idx_bar_inventory_transactions_item_id ON bar_inventory_transactions(item_id);
+-- Create view for top selling items
+CREATE OR REPLACE VIEW bar_top_items AS
+SELECT 
+  bi.id,
+  bi.name,
+  bi.category,
+  SUM(bsi.quantity) as quantity,
+  SUM(bsi.total_price) as revenue
+FROM bar_sales_items bsi
+JOIN bar_inventory bi ON bsi.inventory_id = bi.id
+JOIN bar_sales bs ON bsi.sale_id = bs.id
+WHERE bs.transaction_date >= CURRENT_DATE - INTERVAL '30 days'
+GROUP BY bi.id, bi.name, bi.category
+ORDER BY quantity DESC;
 
