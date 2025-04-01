@@ -1,146 +1,173 @@
 "use client"
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { useState, useEffect } from "react"
+import {
+  BarChart,
+  Bar,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+} from "recharts"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Button } from "@/components/ui/button"
-import { Calendar, Download } from "lucide-react"
-import { Line, LineChart, Bar, BarChart, XAxis, YAxis, CartesianGrid, Legend, ResponsiveContainer } from "recharts"
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
-
-// Sample data - in a real app, this would come from your database
-const salesData = [
-  { name: "Jan", sales: 4000, profit: 2400 },
-  { name: "Feb", sales: 3000, profit: 1398 },
-  { name: "Mar", sales: 2000, profit: 9800 },
-  { name: "Apr", sales: 2780, profit: 3908 },
-  { name: "May", sales: 1890, profit: 4800 },
-  { name: "Jun", sales: 2390, profit: 3800 },
-  { name: "Jul", sales: 3490, profit: 4300 },
-]
-
-const topSellingItems = [
-  { name: "Beer", sales: 120 },
-  { name: "Whiskey", sales: 98 },
-  { name: "Cocktails", sales: 86 },
-  { name: "Wine", sales: 72 },
-  { name: "Vodka", sales: 65 },
-]
+import { supabase } from "@/lib/supabase-client"
 
 export function BarAnalytics() {
+  const [salesData, setSalesData] = useState<any[]>([])
+  const [topItems, setTopItems] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function fetchAnalyticsData() {
+      try {
+        setLoading(true)
+
+        // Fetch sales data
+        const { data: salesData, error: salesError } = await supabase
+          .from("bar_sales_daily")
+          .select("*")
+          .order("date")
+          .limit(30)
+
+        if (salesError) {
+          console.error("Error fetching sales data:", salesError)
+        } else {
+          setSalesData(salesData || [])
+        }
+
+        // Fetch top selling items
+        const { data: itemsData, error: itemsError } = await supabase
+          .from("bar_top_items")
+          .select("*")
+          .order("quantity", { ascending: false })
+          .limit(5)
+
+        if (itemsError) {
+          console.error("Error fetching top items:", itemsError)
+        } else {
+          setTopItems(itemsData || [])
+        }
+      } catch (error) {
+        console.error("Failed to fetch analytics data:", error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchAnalyticsData()
+  }, [])
+
+  const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884D8"]
+
+  const formatCurrency = (value: number) => `₵${value.toFixed(2)}`
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    )
+  }
+
   return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <h2 className="text-xl font-semibold">Analytics Overview</h2>
-        <div className="flex gap-2">
-          <Button variant="outline" className="flex items-center gap-1">
-            <Calendar className="h-4 w-4" />
-            <span>Date Range</span>
-          </Button>
-          <Button variant="outline" className="flex items-center gap-1">
-            <Download className="h-4 w-4" />
-            <span>Export</span>
-          </Button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Total Sales</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">₵24,780.00</div>
-            <p className="text-xs text-muted-foreground">+12.5% from last month</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Total Profit</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">₵10,240.00</div>
-            <p className="text-xs text-muted-foreground">+8.2% from last month</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Items Sold</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">487</div>
-            <p className="text-xs text-muted-foreground">+5.1% from last month</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Tabs defaultValue="sales" className="w-full">
-        <TabsList>
+    <div className="space-y-6">
+      <Tabs defaultValue="sales">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="sales">Sales Trends</TabsTrigger>
-          <TabsTrigger value="items">Top Selling Items</TabsTrigger>
+          <TabsTrigger value="items">Top Items</TabsTrigger>
+          <TabsTrigger value="payment">Payment Methods</TabsTrigger>
         </TabsList>
-        <TabsContent value="sales">
+
+        <TabsContent value="sales" className="pt-4">
           <Card>
             <CardHeader>
-              <CardTitle>Monthly Sales & Profit</CardTitle>
-              <CardDescription>View your bar's performance over time</CardDescription>
+              <CardTitle>Daily Sales (Last 30 Days)</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="h-[300px]">
-                <ChartContainer
-                  config={{
-                    sales: {
-                      label: "Sales",
-                      color: "hsl(var(--chart-1))",
-                    },
-                    profit: {
-                      label: "Profit",
-                      color: "hsl(var(--chart-2))",
-                    },
-                  }}
-                >
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={salesData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="name" />
-                      <YAxis />
-                      <ChartTooltip content={<ChartTooltipContent />} />
-                      <Legend />
-                      <Line type="monotone" dataKey="sales" stroke="var(--color-sales)" strokeWidth={2} />
-                      <Line type="monotone" dataKey="profit" stroke="var(--color-profit)" strokeWidth={2} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </ChartContainer>
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={salesData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="date" />
+                    <YAxis tickFormatter={formatCurrency} />
+                    <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+                    <Legend />
+                    <Line type="monotone" dataKey="total" name="Total Sales" stroke="#8884d8" />
+                  </LineChart>
+                </ResponsiveContainer>
               </div>
             </CardContent>
           </Card>
         </TabsContent>
-        <TabsContent value="items">
+
+        <TabsContent value="items" className="pt-4">
           <Card>
             <CardHeader>
               <CardTitle>Top Selling Items</CardTitle>
-              <CardDescription>Most popular items in your bar</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="h-[300px]">
-                <ChartContainer
-                  config={{
-                    sales: {
-                      label: "Sales",
-                      color: "hsl(var(--chart-1))",
-                    },
-                  }}
-                >
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={topSellingItems}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="name" />
-                      <YAxis />
-                      <ChartTooltip content={<ChartTooltipContent />} />
-                      <Legend />
-                      <Bar dataKey="sales" fill="var(--color-sales)" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </ChartContainer>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={topItems}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" />
+                    <YAxis />
+                    <Tooltip formatter={(value, name) => [value, name === "revenue" ? "Revenue" : "Quantity"]} />
+                    <Legend />
+                    <Bar dataKey="quantity" name="Quantity Sold" fill="#8884d8" />
+                    <Bar dataKey="revenue" name="Revenue (₵)" fill="#82ca9d" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="payment" className="pt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Payment Methods</CardTitle>
+            </CardHeader>
+            <CardContent className="flex justify-center">
+              <div className="h-[300px] w-full max-w-md">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={[
+                        { name: "Cash", value: 40 },
+                        { name: "Mobile Money", value: 30 },
+                        { name: "Card", value: 20 },
+                        { name: "Room Charge", value: 10 },
+                      ]}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={true}
+                      label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                      outerRadius={80}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {[
+                        { name: "Cash", value: 40 },
+                        { name: "Mobile Money", value: 30 },
+                        { name: "Card", value: 20 },
+                        { name: "Room Charge", value: 10 },
+                      ].map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(value) => [`${value}%`, "Percentage"]} />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
               </div>
             </CardContent>
           </Card>
@@ -150,6 +177,5 @@ export function BarAnalytics() {
   )
 }
 
-// Add default export that points to the same component
 export default BarAnalytics
 
