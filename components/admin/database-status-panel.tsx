@@ -39,15 +39,15 @@ export function DatabaseStatusPanel() {
   const getErrorHelp = (errorType?: string) => {
     switch (errorType) {
       case "CONNECTION_REFUSED":
-        return "Make sure your database server is running and accessible from your application server."
+        return "Make sure your Supabase project is online and accessible from your application server."
       case "AUTHENTICATION_FAILED":
-        return "Check your database username and password in the DATABASE_URL environment variable."
+        return "Check your Supabase URL and API keys in the environment variables."
       case "DATABASE_NOT_FOUND":
-        return "The specified database does not exist. You may need to create it first."
+        return "The specified database does not exist. Check your Supabase project settings."
       case "CONNECTION_TIMEOUT":
         return "The connection timed out. Check network connectivity and firewall settings."
       default:
-        return "Check your database configuration and ensure the database server is running."
+        return "Check your Supabase configuration and ensure the service is running."
     }
   }
 
@@ -55,7 +55,7 @@ export function DatabaseStatusPanel() {
     <Card>
       <CardHeader>
         <CardTitle>Database Connection Status</CardTitle>
-        <CardDescription>Check if your application can connect to the database</CardDescription>
+        <CardDescription>Check if your application can connect to Supabase</CardDescription>
       </CardHeader>
       <CardContent>
         {status ? (
