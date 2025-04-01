@@ -16,7 +16,7 @@ export async function databaseErrorMiddleware(request: NextRequest) {
     // If this is a database error, return a 503 Service Unavailable
     if (
       error instanceof Error &&
-      (error.message.includes("database") || error.message.includes("prisma") || error.message.includes("connection"))
+      (error.message.includes("database") || error.message.includes("supabase") || error.message.includes("connection"))
     ) {
       return new NextResponse(
         JSON.stringify({
