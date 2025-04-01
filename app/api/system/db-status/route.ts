@@ -1,45 +1,48 @@
 import { NextResponse } from "next/server"
-import supabase from "@/lib/supabase-client"
+import { supabase } from "@/lib/supabase-client"
 
 export async function GET() {
   try {
-    // Test the connection with a simple query
-    const { data, error } = await supabase.from("rooms").select("id").limit(1)
+    // Test the Supabase connection by making a simple query
+    const { data, error } = await supabase.from("system_settings").select("*").limit(1)
 
-    if (error) throw error
+    if (error) {
+      let errorType = "UNKNOWN_ERROR"
+
+      if (error.message.includes("connection")) {
+        errorType = "CONNECTION_REFUSED"
+      } else if (error.message.includes("authentication")) {
+        errorType = "AUTHENTICATION_FAILED"
+      } else if (error.message.includes("not found") || error.message.includes("doesn't exist")) {
+        errorType = "DATABASE_NOT_FOUND"
+      } else if (error.message.includes("timeout")) {
+        errorType = "CONNECTION_TIMEOUT"
+      }
+
+      return NextResponse.json(
+        {
+          success: false,
+          message: `Failed to connect to Supabase: ${error.message}`,
+          errorType,
+          timestamp: new Date().toISOString(),
+        },
+        { status: 500 },
+      )
+    }
 
     return NextResponse.json({
       success: true,
-      message: "Database connection successful",
+      message: "Successfully connected to Supabase",
       timestamp: new Date().toISOString(),
     })
   } catch (error) {
-    console.error("Database validation error:", error)
-
-    // Determine the specific error type
-    let errorMessage = "Unknown database error"
-    let errorType = "UNKNOWN_ERROR"
-
-    if (error instanceof Error) {
-      errorMessage = error.message
-
-      // Identify common error patterns
-      if (errorMessage.includes("ECONNREFUSED")) {
-        errorType = "CONNECTION_REFUSED"
-      } else if (errorMessage.includes("authentication failed")) {
-        errorType = "AUTHENTICATION_FAILED"
-      } else if (errorMessage.includes("does not exist")) {
-        errorType = "DATABASE_NOT_FOUND"
-      } else if (errorMessage.includes("timeout")) {
-        errorType = "CONNECTION_TIMEOUT"
-      }
-    }
+    console.error("Error checking database status:", error)
 
     return NextResponse.json(
       {
         success: false,
-        message: errorMessage,
-        errorType,
+        message: error instanceof Error ? error.message : "Unknown error occurred",
+        errorType: "UNEXPECTED_ERROR",
         timestamp: new Date().toISOString(),
       },
       { status: 500 },
