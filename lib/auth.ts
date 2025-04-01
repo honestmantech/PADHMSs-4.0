@@ -4,16 +4,19 @@ import supabase from "@/lib/supabase-client"
 
 export async function getUserByEmail(email: string) {
   try {
+    console.log("Looking up user by email:", email)
     const { data, error } = await supabase.from("users").select("*").eq("email", email).single()
 
     if (error) {
       if (error.code === "PGRST116") {
-        // No rows returned - user not found
+        console.log("User not found with email:", email)
         return null
       }
+      console.error("Error fetching user by email:", error)
       throw error
     }
 
+    console.log("User found:", data.id)
     return data
   } catch (error) {
     console.error("Error getting user by email:", error)
@@ -71,22 +74,35 @@ export async function createUser(userData: {
 
 export async function validateCredentials(email: string, password: string) {
   try {
+    console.log("Validating credentials for email:", email)
     const user = await getUserByEmail(email)
 
     if (!user) {
+      console.log("No user found with email:", email)
       return null
     }
 
-    const isPasswordValid = await compare(password, user.password)
+    console.log("User found, comparing password for user:", user.id)
+    console.log("Stored password hash:", user.password.substring(0, 10) + "...")
 
-    if (!isPasswordValid) {
-      return null
+    try {
+      const isPasswordValid = await compare(password, user.password)
+      console.log("Password comparison result:", isPasswordValid)
+
+      if (!isPasswordValid) {
+        console.log("Password validation failed for user:", user.id)
+        return null
+      }
+
+      console.log("Password validation successful for user:", user.id)
+      // Don't return the password
+      const { password: _, ...userWithoutPassword } = user
+
+      return userWithoutPassword
+    } catch (passwordError) {
+      console.error("Error during password comparison:", passwordError)
+      throw new Error(`Password comparison failed: ${passwordError.message}`)
     }
-
-    // Don't return the password
-    const { password: _, ...userWithoutPassword } = user
-
-    return userWithoutPassword
   } catch (error) {
     console.error("Error validating credentials:", error)
     throw error
@@ -94,9 +110,19 @@ export async function validateCredentials(email: string, password: string) {
 }
 
 export async function generateToken(user: { id: string; email: string; role: string }) {
-  return sign({ id: user.id, email: user.email, role: user.role }, process.env.JWT_SECRET || "your-secret-key", {
-    expiresIn: "1d",
-  })
+  try {
+    if (!process.env.JWT_SECRET) {
+      console.error("JWT_SECRET is not defined in environment variables")
+      throw new Error("JWT_SECRET is not configured")
+    }
+
+    return sign({ id: user.id, email: user.email, role: user.role }, process.env.JWT_SECRET || "your-secret-key", {
+      expiresIn: "1d",
+    })
+  } catch (error) {
+    console.error("Error generating token:", error)
+    throw error
+  }
 }
 
 export async function verifyToken(token: string) {
@@ -168,6 +194,47 @@ export async function deleteUser(id: string) {
     return true
   } catch (error) {
     console.error("Error deleting user:", error)
+    throw error
+  }
+}
+
+// Add a function to create a default admin user if it doesn't exist
+export async function ensureDefaultAdminExists() {
+  try {
+    const adminEmail = "admin@hothotelms.com"
+    console.log("Checking if admin exists:", adminEmail)
+
+    const existingAdmin = await getUserByEmail(adminEmail)
+
+    if (!existingAdmin) {
+      console.log("Admin not found, creating default admin user")
+      const adminPassword = await hash("admin123", 10)
+      console.log("Generated password hash for admin")
+
+      const { data, error } = await supabase
+        .from("users")
+        .insert({
+          name: "Admin User",
+          email: adminEmail,
+          password: adminPassword,
+          role: "ADMIN",
+        })
+        .select("id, name, email, role")
+        .single()
+
+      if (error) {
+        console.error("Supabase error creating admin:", error)
+        throw error
+      }
+
+      console.log("Default admin user created:", data.id)
+      return data
+    }
+
+    console.log("Admin already exists:", existingAdmin.id)
+    return existingAdmin
+  } catch (error) {
+    console.error("Error ensuring default admin exists:", error)
     throw error
   }
 }
