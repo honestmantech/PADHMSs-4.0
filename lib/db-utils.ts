@@ -1,4 +1,90 @@
-import supabase from "@/lib/supabase-client"
+import { supabase } from "@/lib/supabase-client"
+
+export async function executeQuery<T>(
+  tableName: string,
+  query: any,
+  errorMessage = "Database query failed",
+): Promise<T[]> {
+  try {
+    const { data, error } = await query
+
+    if (error) {
+      console.error(`Error querying ${tableName}:`, error)
+      throw new Error(`${errorMessage}: ${error.message}`)
+    }
+
+    return data as T[]
+  } catch (error) {
+    console.error(`Unexpected error querying ${tableName}:`, error)
+    throw error
+  }
+}
+
+export async function getById<T>(tableName: string, id: string | number, columns = "*"): Promise<T | null> {
+  try {
+    const { data, error } = await supabase.from(tableName).select(columns).eq("id", id).single()
+
+    if (error) {
+      if (error.code === "PGRST116") {
+        // No rows returned
+        return null
+      }
+      console.error(`Error getting ${tableName} by ID:`, error)
+      throw new Error(`Failed to get ${tableName}: ${error.message}`)
+    }
+
+    return data as T
+  } catch (error) {
+    console.error(`Unexpected error getting ${tableName} by ID:`, error)
+    throw error
+  }
+}
+
+export async function insertRecord<T>(tableName: string, record: any): Promise<T> {
+  try {
+    const { data, error } = await supabase.from(tableName).insert(record).select().single()
+
+    if (error) {
+      console.error(`Error inserting into ${tableName}:`, error)
+      throw new Error(`Failed to create ${tableName}: ${error.message}`)
+    }
+
+    return data as T
+  } catch (error) {
+    console.error(`Unexpected error inserting into ${tableName}:`, error)
+    throw error
+  }
+}
+
+export async function updateRecord<T>(tableName: string, id: string | number, updates: any): Promise<T> {
+  try {
+    const { data, error } = await supabase.from(tableName).update(updates).eq("id", id).select().single()
+
+    if (error) {
+      console.error(`Error updating ${tableName}:`, error)
+      throw new Error(`Failed to update ${tableName}: ${error.message}`)
+    }
+
+    return data as T
+  } catch (error) {
+    console.error(`Unexpected error updating ${tableName}:`, error)
+    throw error
+  }
+}
+
+export async function deleteRecord(tableName: string, id: string | number): Promise<void> {
+  try {
+    const { error } = await supabase.from(tableName).delete().eq("id", id)
+
+    if (error) {
+      console.error(`Error deleting from ${tableName}:`, error)
+      throw new Error(`Failed to delete ${tableName}: ${error.message}`)
+    }
+  } catch (error) {
+    console.error(`Unexpected error deleting from ${tableName}:`, error)
+    throw error
+  }
+}
 
 // Room utilities
 export async function getRooms(filters?: {
