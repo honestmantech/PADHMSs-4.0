@@ -8,7 +8,7 @@ export async function GET() {
     environment: process.env.NODE_ENV,
     // Don't expose sensitive information
     config: {
-      databaseConfigured: !!process.env.DATABASE_URL,
+      supabaseConfigured: !!(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL),
       jwtConfigured: !!process.env.JWT_SECRET,
     },
   })
