@@ -1,0 +1,78 @@
+import { type NextRequest, NextResponse } from "next/server"
+import { verify } from "jsonwebtoken"
+
+// Export middleware runtime config - this is the key fix!
+export const runtime = "nodejs" // default: 'edge'
+
+export async function middleware(request: NextRequest) {
+  // Exclude public routes
+  const publicPaths = ["/login", "/signup", "/register", "/api/auth/login", "/api/auth/register", "/setup"]
+  const isPublicPath = publicPaths.some((path) => request.nextUrl.pathname.startsWith(path))
+
+  if (isPublicPath) {
+    return NextResponse.next()
+  }
+
+  // Check for token
+  const token = request.cookies.get("token")?.value || request.headers.get("authorization")?.split(" ")[1]
+
+  if (!token) {
+    // Redirect to login if accessing a protected page
+    if (!request.nextUrl.pathname.startsWith("/api/")) {
+      console.log("No token found, redirecting to login")
+      return NextResponse.redirect(new URL("/login", request.url))
+    }
+
+    // Return 401 for API routes
+    return NextResponse.json({ error: "Authentication required" }, { status: 401 })
+  }
+
+  try {
+    // Get JWT_SECRET from environment
+    const jwtSecret = process.env.JWT_SECRET
+
+    if (!jwtSecret) {
+      console.error("JWT_SECRET is not defined in environment variables")
+      return NextResponse.json({ error: "Server configuration error" }, { status: 500 })
+    }
+
+    // Verify token
+    const decoded = verify(token, jwtSecret)
+    console.log("Token verified successfully")
+
+    // Add user info to request headers
+    const requestHeaders = new Headers(request.headers)
+    requestHeaders.set("x-user-id", (decoded as any).id)
+    requestHeaders.set("x-user-role", (decoded as any).role)
+
+    return NextResponse.next({
+      request: {
+        headers: requestHeaders,
+      },
+    })
+  } catch (error) {
+    console.error("Token verification failed:", error)
+
+    // Return more detailed error for debugging
+    if (request.nextUrl.pathname.startsWith("/api/")) {
+      return NextResponse.json(
+        {
+          error: "Invalid token",
+          details: error instanceof Error ? error.message : "Unknown error",
+          token: token ? token.substring(0, 10) + "..." : "No token",
+        },
+        { status: 401 },
+      )
+    }
+
+    // Redirect to login with error parameter
+    const loginUrl = new URL("/login", request.url)
+    loginUrl.searchParams.set("error", "invalid_token")
+    return NextResponse.redirect(loginUrl)
+  }
+}
+
+export const config = {
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|direct-dashboard).*)"],
+}
+
